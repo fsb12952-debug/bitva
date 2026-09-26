@@ -1,0 +1,975 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Undertale: Omega Flowey Battle</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
+    <style>
+        * {
+            box-sizing: border-box;
+            user-select: none;
+            -webkit-user-select: none;
+        }
+
+        body, html {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            background-color: #000000;
+            color: #ffffff;
+            font-family: 'Press Start 2P', monospace;
+            overflow: hidden;
+        }
+
+        canvas {
+            image-rendering: pixelated;
+            image-rendering: crisp-edges;
+        }
+
+        .ut-box {
+            border: 4px solid #ffffff;
+            background-color: #000000;
+            box-shadow: 0 0 10px rgba(255, 255, 255, 0.2);
+        }
+
+        .ut-btn {
+            border: 3px solid #ff7f27;
+            color: #ff7f27;
+            background-color: #000000;
+            font-family: 'Press Start 2P', monospace;
+            transition: all 0.1s ease;
+        }
+
+        .ut-btn.active, .ut-btn:hover {
+            border-color: #ffff00;
+            color: #ffff00;
+            background-color: #1a1600;
+            box-shadow: 0 0 12px #ffff00;
+        }
+
+        .glitch-flash {
+            animation: flashAnim 0.15s infinite alternate;
+        }
+
+        @keyframes flashAnim {
+            0% { opacity: 1; filter: invert(0); }
+            100% { opacity: 0.8; filter: invert(0.8) hue-rotate(90deg); }
+        }
+
+        .save-banner {
+            animation: bannerPop 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+
+        @keyframes bannerPop {
+            0% { transform: scale(0.5); opacity: 0; }
+            100% { transform: scale(1); opacity: 1; }
+        }
+
+        ::-webkit-scrollbar { width: 4px; }
+        ::-webkit-scrollbar-thumb { background: #00ff00; }
+    </style>
+</head>
+<body class="flex flex-col items-center justify-between p-2 md:p-3 h-full bg-black select-none">
+
+    <!-- Undertale HUD Top Header -->
+    <header class="w-full max-w-3xl flex justify-between items-center text-xs md:text-sm text-white py-1 px-3 bg-neutral-950 border-b-2 border-red-900 rounded-t">
+        <div class="flex items-center gap-3">
+            <span class="text-red-500 font-bold">FRISK</span>
+            <span class="text-gray-400">LV <span id="playerLV">19</span></span>
+        </div>
+        <div class="text-yellow-400 font-bold tracking-widest animate-pulse">PHOTOSHOP FLOWEY</div>
+        <div class="text-cyan-400 text-xs">SAVES: <span id="saveCount">3</span></div>
+    </header>
+
+    <!-- Main Game Canvas Container -->
+    <main class="relative w-full max-w-3xl flex-1 flex flex-col items-center justify-center my-1 overflow-hidden">
+        
+        <!-- INTRO OVERLAY SCREEN -->
+        <div id="titleScreen" class="absolute inset-0 z-30 bg-black/95 flex flex-col items-center justify-center p-6 text-center border-4 border-green-600 rounded">
+            <h1 class="text-2xl md:text-4xl text-red-600 mb-2 leading-tight glitch-flash">PHOTOSHOP FLOWEY</h1>
+            <h2 class="text-xs md:text-base text-yellow-400 mb-6">БИТВА С ОМЕГА ФЛАУИ</h2>
+            
+            <p class="text-gray-300 text-xs md:text-sm mb-6 leading-relaxed max-w-lg">
+                Флауи поглотил <span class="text-yellow-300 font-bold">6 ЧЕЛОВЕЧЕСКИХ ДУШ</span>!<br>
+                Он переписывает файлы сохранения и управляет реальностью!<br><br>
+                Призывай Души к помощи (<span class="text-green-400">ACT</span>) и выживи в этом безумии!
+            </p>
+
+            <button id="btnStart" class="ut-btn active px-6 py-4 text-sm md:text-base cursor-pointer rounded">
+                УНИЧТОЖИТЬ ФЛАУИ [Z / ENTER]
+            </button>
+        </div>
+
+        <!-- SAVE FILE OVERLAY NOTIFICATION -->
+        <div id="saveOverlay" class="hidden absolute top-4 left-1/2 -translate-x-1/2 z-20 bg-black border-2 border-yellow-400 text-yellow-300 px-4 py-2 text-xs md:text-sm font-bold rounded shadow-lg save-banner">
+            * FILE 3 LOADED.
+        </div>
+
+        <!-- GAME CANVAS -->
+        <canvas id="gameCanvas" class="w-full max-w-2xl aspect-[4/3] bg-black border-2 border-green-800 rounded-t shadow-2xl"></canvas>
+
+        <!-- TYPEWRITER DIALOGUE BOX -->
+        <div id="dialogueBox" class="w-full max-w-2xl ut-box p-3 text-xs md:text-sm text-white leading-relaxed flex items-center min-h-[70px] border-t-0 rounded-b">
+            <span id="typewriterText">* Вы чувствуете, как ваши грехи давит вам на спину...</span>
+        </div>
+
+    </main>
+
+    <!-- COMBAT HUD & FOOTER -->
+    <footer class="w-full max-w-2xl flex flex-col gap-2">
+        <!-- Player HP Bar -->
+        <div class="flex items-center justify-between text-xs md:text-sm px-3 bg-neutral-950 p-2 rounded border border-gray-800">
+            <div class="flex items-center gap-3">
+                <span class="text-yellow-400 font-bold">HP</span>
+                <div class="w-28 md:w-48 h-4 bg-red-900 border border-white relative overflow-hidden rounded-sm">
+                    <div id="hpBar" class="h-full bg-yellow-400 w-full transition-all duration-150"></div>
+                </div>
+                <span id="hpText" class="text-white">50 / 50</span>
+            </div>
+            <div id="soulIndicator" class="text-xs text-green-400 font-bold">
+                ДУША: <span id="currentSoulName">КРАСНАЯ</span>
+            </div>
+        </div>
+
+        <!-- Action Buttons Bar -->
+        <div class="grid grid-cols-4 gap-2 text-center text-xs">
+            <button id="btnFight" class="ut-btn py-3 cursor-pointer active rounded">FIGHT</button>
+            <button id="btnAct" class="ut-btn py-3 cursor-pointer rounded">ACT</button>
+            <button id="btnItem" class="ut-btn py-3 cursor-pointer rounded">ITEM</button>
+            <button id="btnMercy" class="ut-btn py-3 cursor-pointer rounded">MERCY</button>
+        </div>
+
+        <!-- Mobile D-Pad Controls -->
+        <div id="mobileControls" class="grid grid-cols-3 gap-1 w-44 self-center my-1 md:hidden">
+            <div></div>
+            <button id="btnUp" class="ut-box py-2 text-center text-sm font-bold active:bg-green-600">▲</button>
+            <div></div>
+            <button id="btnLeft" class="ut-box py-2 text-center text-sm font-bold active:bg-green-600">◀</button>
+            <button id="btnConfirm" class="ut-box py-2 text-center text-xs font-bold text-yellow-400 active:bg-green-600">Z</button>
+            <button id="btnRight" class="ut-box py-2 text-center text-sm font-bold active:bg-green-600">▶</button>
+            <div></div>
+            <button id="btnDown" class="ut-box py-2 text-center text-sm font-bold active:bg-green-600">▼</button>
+            <div></div>
+        </div>
+    </footer>
+
+    <script>
+        class OmegaAudioEngine {
+            constructor() {
+                this.ctx = null;
+                this.musicInterval = null;
+                this.isMuted = false;
+            }
+
+            init() {
+                if (!this.ctx) {
+                    const AudioContext = window.AudioContext || window.webkitAudioContext;
+                    this.ctx = new AudioContext();
+                }
+                if (this.ctx.state === 'suspended') {
+                    this.ctx.resume();
+                }
+            }
+
+            playBlip(pitch = 300) {
+                if (!this.ctx) return;
+                try {
+                    const osc = this.ctx.createOscillator();
+                    const gain = this.ctx.createGain();
+                    osc.type = 'sawtooth';
+                    osc.frequency.setValueAtTime(pitch + Math.random() * 40, this.ctx.currentTime);
+                    gain.gain.setValueAtTime(0.05, this.ctx.currentTime);
+                    gain.gain.exponentialRampToValueAtTime(0.001, this.ctx.currentTime + 0.04);
+                    osc.connect(gain);
+                    gain.connect(this.ctx.destination);
+                    osc.start();
+                    osc.stop(this.ctx.currentTime + 0.04);
+                } catch(e) {}
+            }
+
+            playLaser() {
+                if (!this.ctx) return;
+                try {
+                    const osc = this.ctx.createOscillator();
+                    const gain = this.ctx.createGain();
+                    osc.type = 'sawtooth';
+                    osc.frequency.setValueAtTime(800, this.ctx.currentTime);
+                    osc.frequency.exponentialRampToValueAtTime(80, this.ctx.currentTime + 0.35);
+                    gain.gain.setValueAtTime(0.25, this.ctx.currentTime);
+                    gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + 0.35);
+                    osc.connect(gain);
+                    gain.connect(this.ctx.destination);
+                    osc.start();
+                    osc.stop(this.ctx.currentTime + 0.35);
+                } catch(e) {}
+            }
+
+            playGlitch() {
+                if (!this.ctx) return;
+                try {
+                    const osc = this.ctx.createOscillator();
+                    const gain = this.ctx.createGain();
+                    osc.type = 'square';
+                    osc.frequency.setValueAtTime(150 + Math.random() * 600, this.ctx.currentTime);
+                    gain.gain.setValueAtTime(0.2, this.ctx.currentTime);
+                    gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + 0.15);
+                    osc.connect(gain);
+                    gain.connect(this.ctx.destination);
+                    osc.start();
+                    osc.stop(this.ctx.currentTime + 0.15);
+                } catch(e) {}
+            }
+
+            playHeal() {
+                if (!this.ctx) return;
+                try {
+                    const osc = this.ctx.createOscillator();
+                    const gain = this.ctx.createGain();
+                    osc.type = 'sine';
+                    osc.frequency.setValueAtTime(400, this.ctx.currentTime);
+                    osc.frequency.exponentialRampToValueAtTime(800, this.ctx.currentTime + 0.2);
+                    gain.gain.setValueAtTime(0.2, this.ctx.currentTime);
+                    gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + 0.2);
+                    osc.connect(gain);
+                    gain.connect(this.ctx.destination);
+                    osc.start();
+                    osc.stop(this.ctx.currentTime + 0.2);
+                } catch(e) {}
+            }
+
+            playHurt() {
+                if (!this.ctx) return;
+                try {
+                    const osc = this.ctx.createOscillator();
+                    const gain = this.ctx.createGain();
+                    osc.type = 'square';
+                    osc.frequency.setValueAtTime(120, this.ctx.currentTime);
+                    osc.frequency.linearRampToValueAtTime(30, this.ctx.currentTime + 0.15);
+                    gain.gain.setValueAtTime(0.3, this.ctx.currentTime);
+                    gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + 0.15);
+                    osc.connect(gain);
+                    gain.connect(this.ctx.destination);
+                    osc.start();
+                    osc.stop(this.ctx.currentTime + 0.15);
+                } catch(e) {}
+            }
+
+            startBossMusic() {
+                if (this.musicInterval) clearInterval(this.musicInterval);
+                this.init();
+
+                // Chaotic Fast Nightmare Melody
+                const baseNotes = [110, 110, 220, 155, 130, 220, 110, 185];
+                let step = 0;
+
+                this.musicInterval = setInterval(() => {
+                    if (!this.ctx || this.isMuted) return;
+                    try {
+                        const osc = this.ctx.createOscillator();
+                        const gain = this.ctx.createGain();
+                        osc.type = (step % 4 === 0) ? 'sawtooth' : 'square';
+
+                        const freq = baseNotes[step % baseNotes.length] * (step % 8 === 0 ? 1.5 : 1.0);
+                        osc.frequency.setValueAtTime(freq, this.ctx.currentTime);
+                        gain.gain.setValueAtTime(0.04, this.ctx.currentTime);
+                        gain.gain.exponentialRampToValueAtTime(0.001, this.ctx.currentTime + 0.1);
+
+                        osc.connect(gain);
+                        gain.connect(this.ctx.destination);
+                        osc.start();
+                        osc.stop(this.ctx.currentTime + 0.1);
+
+                        step++;
+                    } catch(e) {}
+                }, 90);
+            }
+
+            stopMusic() {
+                if (this.musicInterval) {
+                    clearInterval(this.musicInterval);
+                    this.musicInterval = null;
+                }
+            }
+        }
+
+        const audio = new OmegaAudioEngine();
+
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        canvas.width = 640;
+        canvas.height = 480;
+
+        // Game State Variables
+        let gameState = 'TITLE'; // TITLE, MAIN_BATTLE, SOUL_PHASE, FINALE, GAME_OVER, VICTORY
+        let frameCount = 0;
+
+        // Player Soul Parameters
+        const player = {
+            x: 320,
+            y: 380,
+            size: 8,
+            speed: 4,
+            hp: 50,
+            maxHp: 50,
+            invulnerable: 0,
+            color: '#ff0000'
+        };
+
+        // Omega Flowey Parameters
+        const flowey = {
+            hp: 8000,
+            maxHp: 8000,
+            faceMode: 'EVIL', // EVIL, LAUGH, SCREAM, GLITCH
+            eyeScale: 1,
+            laserCharging: false,
+            laserActive: false,
+            laserTimer: 0,
+            laserX: 320,
+            tvShakeX: 0,
+            tvShakeY: 0
+        };
+
+        // 6 Human Souls Intermission System
+        const SOUL_TYPES = [
+            { id: 'CYAN', name: 'ГОЛУБАЯ ДУША (НОЖИ)', color: '#00ffff', item: 'БИНТЫ' },
+            { id: 'ORANGE', name: 'ОРАНЖЕВАЯ ДУША (ПЕРЧАТКИ)', color: '#ff7f00', item: 'КЛАСС' },
+            { id: 'BLUE', name: 'СИНЯЯ ДУША (ТУФЛИ)', color: '#0000ff', item: 'НОТЫ' },
+            { id: 'PURPLE', name: 'ФИОЛЕТОВАЯ ДУША (СЛОВА)', color: '#a000ff', item: 'НАДЕЖДА' },
+            { id: 'GREEN', name: 'ЗЕЛЕНАЯ ДУША (СКОВОРОДЫ)', color: '#00ff00', item: 'ЯИЧНИЦА' },
+            { id: 'YELLOW', name: 'ЖЕЛТАЯ ДУША (ПИСТОЛЕТ)', color: '#ffff00', item: 'КЛЕВЕР' }
+        ];
+
+        let currentSoulIndex = 0;
+        let soulPhaseTimer = 0;
+        let soulActTriggered = false;
+        let soulsFreed = 0;
+
+        // Bullets & Hazards Array
+        let bullets = [];
+        let healItems = [];
+        let soulActButtons = [];
+
+        // Keys Handler
+        const keys = { ArrowUp: false, ArrowDown: false, ArrowLeft: false, ArrowRight: false, KeyZ: false, KeyX: false };
+
+        // Typewriter Effect
+        let currentText = "";
+        let typewriterIndex = 0;
+        let isTyping = false;
+
+        function setDialogue(text) {
+            currentText = text;
+            typewriterIndex = 0;
+            isTyping = true;
+            document.getElementById('typewriterText').innerText = "";
+        }
+
+        function updateTypewriter() {
+            if (isTyping && currentText) {
+                if (typewriterIndex < currentText.length) {
+                    document.getElementById('typewriterText').innerText += currentText[typewriterIndex];
+                    if (currentText[typewriterIndex] !== ' ') audio.playBlip(320);
+                    typewriterIndex++;
+                } else {
+                    isTyping = false;
+                }
+            }
+        }
+        setInterval(updateTypewriter, 25);
+
+        function drawPhotoshopFlowey(ctx) {
+            ctx.save();
+
+            // TV Shake
+            const shakeX = (Math.random() - 0.5) * flowey.tvShakeX;
+            const shakeY = (Math.random() - 0.5) * flowey.tvShakeY;
+            ctx.translate(320 + shakeX, 130 + shakeY);
+
+            // Organic Vines / Claws Background
+            ctx.strokeStyle = '#00aa00';
+            ctx.lineWidth = 12;
+            ctx.beginPath();
+            // Left Vine Arm
+            ctx.moveTo(-120, 40);
+            ctx.quadraticCurveTo(-240, 100 + Math.sin(frameCount * 0.1) * 20, -280, 200);
+            // Right Vine Arm
+            ctx.moveTo(120, 40);
+            ctx.quadraticCurveTo(240, 100 + Math.cos(frameCount * 0.1) * 20, 280, 200);
+            ctx.stroke();
+
+            // Claws / Cannons on Vines
+            ctx.fillStyle = '#228b22';
+            ctx.fillRect(-295, 190, 30, 30);
+            ctx.fillRect(265, 190, 30, 30);
+
+            // Main TV Frame
+            ctx.fillStyle = '#333333';
+            ctx.fillRect(-110, -80, 220, 150);
+            ctx.strokeStyle = '#666666';
+            ctx.lineWidth = 6;
+            ctx.strokeRect(-110, -80, 220, 150);
+
+            // TV Screen Inner
+            ctx.fillStyle = '#111111';
+            ctx.fillRect(-98, -68, 196, 126);
+
+            // TV Screen Face Rendering
+            ctx.save();
+            ctx.clip(new Path2D(`M -98 -68 h 196 v 126 h -196 z`));
+
+            // Face Static Background Noise
+            for (let i = 0; i < 30; i++) {
+                ctx.fillStyle = Math.random() > 0.5 ? '#ffffff22' : '#00000022';
+                ctx.fillRect(-98 + Math.random() * 196, -68 + Math.random() * 126, 8, 4);
+            }
+
+            if (flowey.faceMode === 'EVIL') {
+                // Realistic Glitched Pixel Eyes
+                ctx.fillStyle = '#ffffff';
+                ctx.beginPath();
+                ctx.arc(-40, -15, 22, 0, Math.PI * 2);
+                ctx.arc(40, -15, 22, 0, Math.PI * 2);
+                ctx.fill();
+
+                ctx.fillStyle = '#ff0000';
+                ctx.beginPath();
+                ctx.arc(-40 + Math.sin(frameCount * 0.2) * 5, -15, 8, 0, Math.PI * 2);
+                ctx.arc(40 + Math.cos(frameCount * 0.2) * 5, -15, 8, 0, Math.PI * 2);
+                ctx.fill();
+
+                // Creepy Smile
+                ctx.strokeStyle = '#ffffff';
+                ctx.lineWidth = 4;
+                ctx.beginPath();
+                ctx.arc(0, 15, 45, 0.2, Math.PI - 0.2);
+                ctx.stroke();
+
+                // Teeth
+                for (let x = -30; x <= 30; x += 10) {
+                    ctx.fillStyle = '#ffffff';
+                    ctx.fillRect(x - 3, 22, 6, 10);
+                }
+            } else if (flowey.faceMode === 'LAUGH' || flowey.faceMode === 'SCREAM') {
+                // Wide Open Mouth Screaming Face
+                ctx.fillStyle = '#ff0000';
+                ctx.beginPath();
+                ctx.ellipse(0, 10, 50, 35, 0, 0, Math.PI * 2);
+                ctx.fill();
+
+                ctx.fillStyle = '#000000';
+                ctx.beginPath();
+                ctx.ellipse(0, 10, 42, 28, 0, 0, Math.PI * 2);
+                ctx.fill();
+
+                // Eyes
+                ctx.fillStyle = '#ffff00';
+                ctx.fillRect(-50, -40, 30, 20);
+                ctx.fillRect(20, -40, 30, 20);
+            } else if (flowey.faceMode === 'GLITCH') {
+                // Glitched Face Phase
+                ctx.fillStyle = '#00ffff';
+                ctx.fillRect(-60, -30, 40, 50);
+                ctx.fillStyle = '#ff00ff';
+                ctx.fillRect(20, -20, 50, 30);
+                ctx.fillStyle = '#ffffff';
+                ctx.font = '20px monospace';
+                ctx.fillText("HELP ME", -40, 10);
+            }
+
+            ctx.restore(); // Restore TV Clip
+
+            // Flowey HP Bar Above TV
+            ctx.fillStyle = '#550000';
+            ctx.fillRect(-150, -100, 300, 12);
+            ctx.fillStyle = '#00ff00';
+            ctx.fillRect(-150, -100, (flowey.hp / flowey.maxHp) * 300, 12);
+            ctx.strokeStyle = '#ffffff';
+            ctx.lineWidth = 2;
+            ctx.strokeRect(-150, -100, 300, 12);
+
+            ctx.restore();
+        }
+
+        function triggerMouthLaser() {
+            flowey.laserCharging = true;
+            flowey.laserTimer = 60; // 1 second charge
+            flowey.laserX = player.x;
+            flowey.faceMode = 'SCREAM';
+            flowey.tvShakeX = 10;
+            flowey.tvShakeY = 10;
+            audio.playGlitch();
+        }
+
+        function updateLaserLogic() {
+            if (flowey.laserCharging) {
+                flowey.laserTimer--;
+                if (flowey.laserTimer <= 0) {
+                    flowey.laserCharging = false;
+                    flowey.laserActive = true;
+                    flowey.laserTimer = 50; // 0.8s blast
+                    audio.playLaser();
+                }
+            } else if (flowey.laserActive) {
+                flowey.laserTimer--;
+                // Check Collision with Player
+                if (Math.abs(player.x - flowey.laserX) < 35 && player.y > 150) {
+                    damagePlayer(6);
+                }
+
+                if (flowey.laserTimer <= 0) {
+                    flowey.laserActive = false;
+                    flowey.faceMode = 'EVIL';
+                    flowey.tvShakeX = 0;
+                    flowey.tvShakeY = 0;
+                }
+            }
+        }
+
+        function drawLaser(ctx) {
+            if (flowey.laserCharging) {
+                // Laser Warning Telegraph Line
+                ctx.strokeStyle = '#ff0000';
+                ctx.lineWidth = 3;
+                ctx.setLineDash([8, 8]);
+                ctx.beginPath();
+                ctx.moveTo(flowey.laserX, 150);
+                ctx.lineTo(flowey.laserX, 480);
+                ctx.stroke();
+                ctx.setLineDash([]);
+            } else if (flowey.laserActive) {
+                // Giant Mouth Laser Beam
+                ctx.fillStyle = '#ffffff';
+                ctx.fillRect(flowey.laserX - 35, 150, 70, 330);
+                ctx.fillStyle = '#00ffff';
+                ctx.fillRect(flowey.laserX - 20, 150, 40, 330);
+            }
+        }
+
+        function startSoulPhase(index) {
+            gameState = 'SOUL_PHASE';
+            currentSoulIndex = index;
+            soulPhaseTimer = 450; // ~7.5 seconds per soul
+            soulActTriggered = false;
+            bullets = [];
+            healItems = [];
+            soulActButtons = [];
+
+            const soulInfo = SOUL_TYPES[currentSoulIndex];
+            document.getElementById('currentSoulName').innerText = soulInfo.name;
+            document.getElementById('currentSoulName').style.color = soulInfo.color;
+
+            setDialogue(`* Появление: ${soulInfo.name}! Нажми ACT для вызова помощи!`);
+            triggerSaveBanner("* FILE 3 SAVED.");
+        }
+
+        function spawnSoulHazards() {
+            const soul = SOUL_TYPES[currentSoulIndex];
+
+            if (frameCount % 25 === 0 && !soulActTriggered) {
+                if (soul.id === 'CYAN') {
+                    // Spinning Toy Knives
+                    bullets.push({
+                        x: Math.random() * 600 + 20,
+                        y: 50,
+                        vx: (Math.random() - 0.5) * 3,
+                        vy: 4,
+                        size: 8,
+                        color: soul.color,
+                        type: 'KNIFE'
+                    });
+                } else if (soul.id === 'ORANGE') {
+                    // Punching Tough Gloves
+                    bullets.push({
+                        x: player.x + (Math.random() - 0.5) * 80,
+                        y: 0,
+                        vx: 0,
+                        vy: 6,
+                        size: 12,
+                        color: soul.color,
+                        type: 'GLOVE'
+                    });
+                } else if (soul.id === 'BLUE') {
+                    // Hopping Ballet Shoes
+                    bullets.push({
+                        x: Math.random() > 0.5 ? 0 : 640,
+                        y: 380,
+                        vx: Math.random() > 0.5 ? 4 : -4,
+                        vy: -4,
+                        size: 10,
+                        color: soul.color,
+                        type: 'SHOE'
+                    });
+                } else if (soul.id === 'PURPLE') {
+                    // Falling Negative Words
+                    bullets.push({
+                        x: Math.random() * 560 + 40,
+                        y: 20,
+                        vx: 0,
+                        vy: 3,
+                        size: 10,
+                        text: ['HATE', 'TRAP', 'FEAR', 'DARK'][Math.floor(Math.random() * 4)],
+                        color: soul.color,
+                        type: 'WORD'
+                    });
+                } else if (soul.id === 'GREEN') {
+                    // Fireballs from Burnt Pans
+                    bullets.push({
+                        x: Math.random() * 600 + 20,
+                        y: 40,
+                        vx: (Math.random() - 0.5) * 4,
+                        vy: 5,
+                        size: 9,
+                        color: soul.color,
+                        type: 'FIRE'
+                    });
+                } else if (soul.id === 'YELLOW') {
+                    // Gun Shots
+                    bullets.push({
+                        x: Math.random() * 600 + 20,
+                        y: 30,
+                        vx: 0,
+                        vy: 8,
+                        size: 6,
+                        color: soul.color,
+                        type: 'BULLET'
+                    });
+                }
+            }
+
+            // Spawn ACT Call Button periodically
+            if (frameCount % 120 === 0 && !soulActTriggered && soulActButtons.length === 0) {
+                soulActButtons.push({
+                    x: Math.random() * 480 + 80,
+                    y: Math.random() * 180 + 220,
+                    w: 80,
+                    h: 30
+                });
+            }
+        }
+
+        function triggerSoulHelp() {
+            soulActTriggered = true;
+            audio.playHeal();
+            const soul = SOUL_TYPES[currentSoulIndex];
+            setDialogue(`* Душа услышала ваш призыв! Предметы превращены в ${soul.item}!`);
+
+            // Convert all active dangerous bullets into healing items!
+            bullets.forEach(b => {
+                healItems.push({
+                    x: b.x,
+                    y: b.y,
+                    vx: (Math.random() - 0.5) * 2,
+                    vy: 2,
+                    size: 10,
+                    healAmount: 8
+                });
+            });
+            bullets = [];
+            soulActButtons = [];
+            soulsFreed++;
+        }
+
+        function damagePlayer(amount) {
+            if (player.invulnerable > 0) return;
+            player.hp = Math.max(0, player.hp - amount);
+            player.invulnerable = 40; // 0.6s immunity frames
+            audio.playHurt();
+            updateStatsUI();
+
+            // Random Save File Reload Effect on Heavy Hits
+            if (Math.random() < 0.2) {
+                triggerSaveBanner("* FILE 3 LOADED.");
+                audio.playGlitch();
+            }
+
+            if (player.hp <= 0) {
+                gameState = 'GAME_OVER';
+                audio.stopMusic();
+                setDialogue("* ВАША ДУША РАЗБИЛАСЬ... ФЛАУИ ПОБЕДИЛ!");
+            }
+        }
+
+        function triggerSaveBanner(text) {
+            const banner = document.getElementById('saveOverlay');
+            banner.innerText = text;
+            banner.classList.remove('hidden');
+            setTimeout(() => banner.classList.add('hidden'), 1200);
+        }
+
+        function updateStatsUI() {
+            document.getElementById('hpBar').style.width = `${(player.hp / player.maxHp) * 100}%`;
+            document.getElementById('hpText').innerText = `${player.hp} / ${player.maxHp}`;
+            document.getElementById('saveCount').innerText = Math.floor(Math.random() * 99 + 1);
+        }
+
+        function updateBulletsAndHeals() {
+            // Update Bullets
+            for (let i = bullets.length - 1; i >= 0; i--) {
+                const b = bullets[i];
+                b.x += b.vx;
+                b.y += b.vy;
+
+                // Player Collision
+                const dist = Math.hypot(player.x - b.x, player.y - b.y);
+                if (dist < player.size + b.size) {
+                    damagePlayer(5);
+                    bullets.splice(i, 1);
+                    continue;
+                }
+
+                // Bounds Removal
+                if (b.y > 490 || b.x < -20 || b.x > 660) {
+                    bullets.splice(i, 1);
+                }
+            }
+
+            // Update Heal Items
+            for (let i = healItems.length - 1; i >= 0; i--) {
+                const h = healItems[i];
+                h.x += h.vx;
+                h.y += h.vy;
+
+                const dist = Math.hypot(player.x - h.x, player.y - h.y);
+                if (dist < player.size + h.size + 4) {
+                    player.hp = Math.min(player.maxHp, player.hp + h.healAmount);
+                    audio.playHeal();
+                    updateStatsUI();
+                    healItems.splice(i, 1);
+                    continue;
+                }
+
+                if (h.y > 490) healItems.splice(i, 1);
+            }
+
+            // Update Soul ACT Buttons Collision
+            for (let i = soulActButtons.length - 1; i >= 0; i--) {
+                const btn = soulActButtons[i];
+                if (player.x > btn.x && player.x < btn.x + btn.w && player.y > btn.y && player.y < btn.y + btn.h) {
+                    triggerSoulHelp();
+                }
+            }
+        }
+
+        function spawnMainBattleAttacks() {
+            if (gameState !== 'MAIN_BATTLE' && gameState !== 'FINALE') return;
+
+            // Random Shuriken / Petal Ring Burst
+            if (frameCount % 70 === 0) {
+                const numPetals = 8;
+                for (let i = 0; i < numPetals; i++) {
+                    const angle = (Math.PI * 2 / numPetals) * i;
+                    bullets.push({
+                        x: 320,
+                        y: 180,
+                        vx: Math.cos(angle) * 3.5,
+                        vy: Math.sin(angle) * 3.5,
+                        size: 6,
+                        color: '#ffff00',
+                        type: 'PETAL'
+                    });
+                }
+            }
+
+            // Random Mouth Laser
+            if (frameCount % 240 === 0) {
+                triggerMouthLaser();
+            }
+
+            // Finale Phase Attacks (Souls Attack Flowey Automatically)
+            if (gameState === 'FINALE') {
+                if (frameCount % 15 === 0) {
+                    flowey.hp = Math.max(0, flowey.hp - 120);
+                    audio.playHurt();
+                    if (flowey.hp <= 0) {
+                        gameState = 'VICTORY';
+                        setDialogue("* ЗАЩИТА ФЛАУИ УПАЛА ДО 0! ДУШИ ПОБЕДИЛИ!");
+                        audio.stopMusic();
+                    }
+                }
+            }
+        }
+
+        function render() {
+            ctx.fillStyle = '#000000';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            // Draw Photoshop Flowey
+            drawPhotoshopFlowey(ctx);
+
+            // Draw Mouth Laser
+            drawLaser(ctx);
+
+            // Draw Bullets
+            bullets.forEach(b => {
+                ctx.fillStyle = b.color || '#ffffff';
+                if (b.type === 'WORD') {
+                    ctx.font = '12px "Press Start 2P"';
+                    ctx.fillText(b.text, b.x, b.y);
+                } else {
+                    ctx.beginPath();
+                    ctx.arc(b.x, b.y, b.size, 0, Math.PI * 2);
+                    ctx.fill();
+                }
+            });
+
+            // Draw Heal Items
+            healItems.forEach(h => {
+                ctx.fillStyle = '#00ff00';
+                ctx.beginPath();
+                ctx.arc(h.x, h.y, h.size, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.fillStyle = '#ffffff';
+                ctx.font = '8px "Press Start 2P"';
+                ctx.fillText("+HP", h.x - 10, h.y - 12);
+            });
+
+            // Draw Soul ACT Floating Buttons
+            soulActButtons.forEach(btn => {
+                ctx.fillStyle = '#000000';
+                ctx.strokeStyle = '#ffff00';
+                ctx.lineWidth = 3;
+                ctx.fillRect(btn.x, btn.y, btn.w, btn.h);
+                ctx.strokeRect(btn.x, btn.y, btn.w, btn.h);
+                ctx.fillStyle = '#ffff00';
+                ctx.font = '10px "Press Start 2P"';
+                ctx.fillText("♥ ACT", btn.x + 10, btn.y + 20);
+            });
+
+            // Draw Player Heart Soul
+            if (player.invulnerable % 4 < 2) {
+                ctx.fillStyle = player.color;
+                ctx.beginPath();
+                ctx.moveTo(player.x, player.y + 4);
+                ctx.bezierCurveTo(player.x - 6, player.y - 4, player.x - 10, player.y - 2, player.x - 6, player.y - 8);
+                ctx.bezierCurveTo(player.x - 3, player.y - 12, player.x, player.y - 8, player.x, player.y - 4);
+                ctx.bezierCurveTo(player.x, player.y - 8, player.x + 3, player.y - 12, player.x + 6, player.y - 8);
+                ctx.bezierCurveTo(player.x + 10, player.y - 2, player.x + 6, player.y - 4, player.x, player.y + 4);
+                ctx.fill();
+            }
+        }
+
+        function update() {
+            frameCount++;
+
+            if (player.invulnerable > 0) player.invulnerable--;
+
+            if (gameState === 'MAIN_BATTLE' || gameState === 'SOUL_PHASE' || gameState === 'FINALE') {
+                // Movement Controls
+                if (keys.ArrowUp) player.y -= player.speed;
+                if (keys.ArrowDown) player.y += player.speed;
+                if (keys.ArrowLeft) player.x -= player.speed;
+                if (keys.ArrowRight) player.x += player.speed;
+
+                // Clamping Boundaries
+                player.x = Math.max(15, Math.min(625, player.x));
+                player.y = Math.max(160, Math.min(465, player.y));
+
+                updateLaserLogic();
+                updateBulletsAndHeals();
+                spawnMainBattleAttacks();
+            }
+
+            if (gameState === 'SOUL_PHASE') {
+                soulPhaseTimer--;
+                spawnSoulHazards();
+
+                if (soulPhaseTimer <= 0) {
+                    currentSoulIndex++;
+                    if (currentSoulIndex < SOUL_TYPES.length) {
+                        startSoulPhase(currentSoulIndex);
+                    } else {
+                        // All 6 Souls Freed! Trigger Finale!
+                        gameState = 'FINALE';
+                        flowey.faceMode = 'GLITCH';
+                        setDialogue("* ВСЕ 6 ДУШ ВОССТАЛИ ПРОТИВ ФЛАУИ! НАПАДЕНИЕ!");
+                        triggerSaveBanner("* SAVES DESTROYED!");
+                    }
+                }
+            } else if (gameState === 'MAIN_BATTLE') {
+                // Periodically Trigger Soul Phase
+                if (frameCount % 400 === 0 && currentSoulIndex < SOUL_TYPES.length) {
+                    startSoulPhase(currentSoulIndex);
+                }
+            }
+
+            render();
+            requestAnimationFrame(update);
+        }
+
+        function setupControls() {
+            window.addEventListener('keydown', (e) => {
+                if (e.code === 'ArrowUp' || e.code === 'KeyW') keys.ArrowUp = true;
+                if (e.code === 'ArrowDown' || e.code === 'KeyS') keys.ArrowDown = true;
+                if (e.code === 'ArrowLeft' || e.code === 'KeyA') keys.ArrowLeft = true;
+                if (e.code === 'ArrowRight' || e.code === 'KeyD') keys.ArrowRight = true;
+                if (e.code === 'KeyZ' || e.code === 'Enter' || e.code === 'Space') {
+                    keys.KeyZ = true;
+                    if (gameState === 'TITLE') startGame();
+                }
+            });
+
+            window.addEventListener('keyup', (e) => {
+                if (e.code === 'ArrowUp' || e.code === 'KeyW') keys.ArrowUp = false;
+                if (e.code === 'ArrowDown' || e.code === 'KeyS') keys.ArrowDown = false;
+                if (e.code === 'ArrowLeft' || e.code === 'KeyA') keys.ArrowLeft = false;
+                if (e.code === 'ArrowRight' || e.code === 'KeyD') keys.ArrowRight = false;
+                if (e.code === 'KeyZ' || e.code === 'Enter' || e.code === 'Space') keys.KeyZ = false;
+            });
+
+            // Mobile Touch Bindings
+            const bindTouch = (id, keyName) => {
+                const btn = document.getElementById(id);
+                btn.addEventListener('touchstart', (e) => { e.preventDefault(); keys[keyName] = true; });
+                btn.addEventListener('touchend', (e) => { e.preventDefault(); keys[keyName] = false; });
+            };
+
+            bindTouch('btnUp', 'ArrowUp');
+            bindTouch('btnDown', 'ArrowDown');
+            bindTouch('btnLeft', 'ArrowLeft');
+            bindTouch('btnRight', 'ArrowRight');
+
+            document.getElementById('btnConfirm').addEventListener('touchstart', (e) => {
+                e.preventDefault();
+                if (gameState === 'TITLE') startGame();
+                else keys.KeyZ = true;
+            });
+
+            document.getElementById('btnStart').addEventListener('click', startGame);
+
+            // Manual Action Buttons Click Handlers
+            document.getElementById('btnAct').addEventListener('click', () => {
+                if (gameState === 'SOUL_PHASE' && !soulActTriggered) {
+                    triggerSoulHelp();
+                }
+            });
+            document.getElementById('btnFight').addEventListener('click', () => {
+                if (gameState === 'MAIN_BATTLE' || gameState === 'FINALE') {
+                    flowey.hp = Math.max(0, flowey.hp - 350);
+                    audio.playHurt();
+                    setDialogue("* Вы атаковали ФЛАУИ! Нанесено 350 урона!");
+                }
+            });
+        }
+
+        function startGame() {
+            document.getElementById('titleScreen').style.display = 'none';
+            gameState = 'MAIN_BATTLE';
+            player.hp = 50;
+            flowey.hp = 8000;
+            currentSoulIndex = 0;
+            soulsFreed = 0;
+            updateStatsUI();
+            setDialogue("* ФЛАУИ смеется над вашей беспомощностью! Выживай!");
+            audio.startBossMusic();
+        }
+
+        window.onload = () => {
+            setupControls();
+            update();
+        };
+    </script>
+</body>
+</html>
